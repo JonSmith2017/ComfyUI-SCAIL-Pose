@@ -1,6 +1,5 @@
 #! /bin/sh
 
-touch .show
 while [ 1 ]
 do
 	a=`du -d0|awk '{print $1}'`
