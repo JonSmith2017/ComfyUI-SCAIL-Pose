@@ -7,5 +7,5 @@ do
 	b=`du -d0|awk '{print $1}'`
 	b=`expr $b - $a`
 	a=`du -d0 -h|awk '{print $1}'`
-	echo -n "$b kb/s   ${a}   \r"
+	echo -en "$b kb/s   ${a}   \r"
 done
