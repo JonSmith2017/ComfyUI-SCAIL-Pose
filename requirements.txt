@@ -1,0 +1,6 @@
+taichi
+pyrender
+trimesh
+opencv-python
+matplotlib
+pillow
