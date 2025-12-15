@@ -3,7 +3,7 @@ name = "ComfyUI-SCAIL-Pose"
 description = "ComfyUI nodes for SCAIL input processing"
 version = "1.0.0"
 license = {file = "LICENSE"}
-dependencies = ["taichi", "pyrender", "trimesh", "opencv-python", "matplotlib", "pillow"]
+dependencies = ["taichi", "trimesh", "opencv-python", "matplotlib", "pillow"]
 
 [project.urls]
 Repository = "https://github.com/kijai/ComfyUI-SCAIL-Pose"
