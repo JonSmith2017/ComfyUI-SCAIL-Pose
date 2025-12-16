@@ -261,6 +261,46 @@ def render_nlf_as_images(smpl_poses, dw_poses, height, width, video_length, intr
     return frames_np_rgba
 
 
+def align_persons_across_frames(smpl_poses, max_persons=2):
+    """
+    Aligns persons across frames so that the same index refers to the same individual.
+    Uses pelvis joint (index 0) for proximity matching.
+    """
+    video_length = len(smpl_poses)
+    aligned = [[None for _ in range(max_persons)] for _ in range(video_length)]
+
+    # Initialize with first frame
+    for i in range(min(max_persons, len(smpl_poses[0]))):
+        aligned[0][i] = smpl_poses[0][i]
+
+    for t in range(1, video_length):
+        prev_persons = [p for p in aligned[t-1] if p is not None]
+        curr_persons = smpl_poses[t]
+        assigned = set()
+        for i, prev_pose in enumerate(prev_persons):
+            if prev_pose is None:
+                continue
+            prev_pelvis = prev_pose[0]  # shape (3,)
+            # Find closest in current frame
+            min_dist = float('inf')
+            min_j = -1
+            for j, curr_pose in enumerate(curr_persons):
+                if j in assigned:
+                    continue
+                curr_pelvis = curr_pose[0]
+                dist = np.linalg.norm(prev_pelvis.cpu().numpy() - curr_pelvis.cpu().numpy())
+                if dist < min_dist:
+                    min_dist = dist
+                    min_j = j
+            if min_j >= 0:
+                aligned[t][i] = curr_persons[min_j]
+                assigned.add(min_j)
+        # Fill unassigned slots with zeros
+        for i in range(max_persons):
+            if aligned[t][i] is None:
+                aligned[t][i] = torch.zeros((24, 3), dtype=torch.float32)
+    return aligned
+
 def render_multi_nlf_as_images(smpl_poses, dw_poses, height, width, video_length, intrinsic_matrix=None, draw_2d=True, draw_face=True, draw_hands=True):
 
 
@@ -383,6 +423,10 @@ def render_multi_nlf_as_images(smpl_poses, dw_poses, height, width, video_length
             smpl_poses_second.append([smpl_poses[i][1]])  # Second person
         else:
             smpl_poses_second.append([torch.zeros((24, 3), dtype=torch.float32)])
+
+    aligned = align_persons_across_frames(smpl_poses, max_persons=2)
+    smpl_poses_first = [[frame[0]] for frame in aligned]
+    smpl_poses_second = [[frame[1]] for frame in aligned]
 
     if intrinsic_matrix is None:
         intrinsic_matrix = intrinsic_matrix_from_field_of_view((height, width))
