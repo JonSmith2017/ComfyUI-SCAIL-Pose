@@ -254,6 +254,7 @@ class RenderNLFPoses:
                 "draw_hands": ("BOOLEAN", {"default": True, "tooltip": "Whether to draw hand keypoints"}),
                 "render_device": (["gpu", "cpu", "opengl", "cuda", "vulkan", "metal"], {"default": "gpu", "tooltip": "Taichi device to use for rendering"}),
                 "scale_hands": ("BOOLEAN", {"default": True, "tooltip": "Whether to scale hand keypoints when aligning DW poses"}),
+                "render_backend": (["taichi", "torch"], {"default": "taichi", "tooltip": "Rendering backend to use"}),
             }
     }
 
@@ -262,22 +263,25 @@ class RenderNLFPoses:
     FUNCTION = "predict"
     CATEGORY = "WanVideoWrapper"
 
-    def predict(self, nlf_poses, width, height, dw_poses=None, ref_dw_pose=None, draw_face=True, draw_hands=True, render_device="gpu", scale_hands=True):
+    def predict(self, nlf_poses, width, height, dw_poses=None, ref_dw_pose=None, draw_face=True, draw_hands=True, render_device="gpu", scale_hands=True, render_backend="taichi"):
 
         from .NLFPoseExtract.nlf_render import render_nlf_as_images, render_multi_nlf_as_images, shift_dwpose_according_to_nlf, process_data_to_COCO_format, intrinsic_matrix_from_field_of_view
         from .NLFPoseExtract.align3d import solve_new_camera_params_central, solve_new_camera_params_down
-        import taichi as ti
-
-        device_map = {
-            "cpu": ti.cpu,
-            "gpu": ti.gpu,
-            "opengl": ti.opengl,
-            "cuda": ti.cuda,
-            "vulkan": ti.vulkan,
-            "metal": ti.metal,
-        }
-
-        ti.init(arch=device_map.get(render_device.lower()))
+        if render_backend == "taichi":
+            try:
+                import taichi as ti
+                device_map = {
+                    "cpu": ti.cpu,
+                    "gpu": ti.gpu,
+                    "opengl": ti.opengl,
+                    "cuda": ti.cuda,
+                    "vulkan": ti.vulkan,
+                    "metal": ti.metal,
+                }
+                ti.init(arch=device_map.get(render_device.lower()))
+            except:
+                logging.warning("Taichi selected but not installed. Falling back to torch rendering.")
+                render_backend = "torch"
 
         if isinstance(nlf_poses, dict):
             pose_input = nlf_poses['joints3d_nonparam'][0] if 'joints3d_nonparam' in nlf_poses else nlf_poses
@@ -346,9 +350,9 @@ class RenderNLFPoses:
             intrinsic_matrix = ori_camera_pose
 
         if pose_input[0].shape[0] > 1:
-            frames_np = render_multi_nlf_as_images(pose_input, dw_pose_input, height, width, len(pose_input), intrinsic_matrix=intrinsic_matrix, draw_face=draw_face, draw_hands=draw_hands)
+            frames_np = render_multi_nlf_as_images(pose_input, dw_pose_input, height, width, len(pose_input), intrinsic_matrix=intrinsic_matrix, draw_face=draw_face, draw_hands=draw_hands, render_backend = render_backend)
         else:
-            frames_np = render_nlf_as_images(pose_input, dw_pose_input, height, width, len(pose_input), intrinsic_matrix=intrinsic_matrix, draw_face=draw_face, draw_hands=draw_hands)
+            frames_np = render_nlf_as_images(pose_input, dw_pose_input, height, width, len(pose_input), intrinsic_matrix=intrinsic_matrix, draw_face=draw_face, draw_hands=draw_hands, render_backend = render_backend)
 
         frames_tensor = torch.from_numpy(np.stack(frames_np, axis=0)).contiguous() / 255.0
         frames_tensor, mask = frames_tensor[..., :3], frames_tensor[..., -1] > 0.5

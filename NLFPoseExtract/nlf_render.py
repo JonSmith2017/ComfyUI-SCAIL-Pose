@@ -3,7 +3,8 @@ import torch
 import copy
 import logging
 
-from ..render_3d.taichi_cylinder import render_whole
+from ..render_3d.taichi_cylinder import render_whole as render_whole_taichi
+from ..render_3d.render_torch import render_whole as render_whole_torch
 from ..pose_draw.draw_pose_utils import draw_pose_to_canvas_np
 
 def p3d_single_p2d(points, intrinsic_matrix):
@@ -187,7 +188,7 @@ def collect_smpl_poses_samurai(data):
 
 
 
-def render_nlf_as_images(smpl_poses, dw_poses, height, width, video_length, intrinsic_matrix=None, draw_2d=True, draw_face=True, draw_hands=True):
+def render_nlf_as_images(smpl_poses, dw_poses, height, width, video_length, intrinsic_matrix=None, draw_2d=True, draw_face=True, draw_hands=True, render_backend="taichi"):
     """ return a list of images """
 
     base_colors_255_dict = {
@@ -282,8 +283,14 @@ def render_nlf_as_images(smpl_poses, dw_poses, height, width, video_length, intr
         cylinder_specs = get_single_pose_cylinder_specs((i, smpl_poses[i], None, None, None, None, colors, limb_seq, draw_seq))
         cylinder_specs_list.append(cylinder_specs)
 
-
-    frames_np_rgba = render_whole(cylinder_specs_list, H=height, W=width, fx=focal_x, fy=focal_y, cx=princpt[0], cy=princpt[1])
+    if render_backend == "taichi":
+        try:
+            frames_np_rgba = render_whole_taichi(cylinder_specs_list, H=height, W=width, fx=focal_x, fy=focal_y, cx=princpt[0], cy=princpt[1])
+        except:
+            logging.warning("Taichi rendering failed. Falling back to torch rendering.")
+            frames_np_rgba = render_whole_torch(cylinder_specs_list, H=height, W=width, fx=focal_x, fy=focal_y, cx=princpt[0], cy=princpt[1])
+    else:
+        frames_np_rgba = render_whole_torch(cylinder_specs_list, H=height, W=width, fx=focal_x, fy=focal_y, cx=princpt[0], cy=princpt[1])
     if dw_poses is not None and draw_2d:
         canvas_2d = draw_pose_to_canvas_np(aligned_poses, pool=None, H=height, W=width, reshape_scale=0, show_feet_flag=False, show_body_flag=False, show_cheek_flag=True, dw_hand=True, show_face_flag=draw_face, show_hand_flag=draw_hands)
 
@@ -476,7 +483,7 @@ def get_cylinder_specs_list_from_poses(smpl_poses, include_missing=False):
 
     return cylinder_specs_list
 
-def render_multi_nlf_as_images(smpl_poses, dw_poses, height, width, video_length, intrinsic_matrix=None, draw_2d=True, draw_face=True, draw_hands=True):
+def render_multi_nlf_as_images(smpl_poses, dw_poses, height, width, video_length, intrinsic_matrix=None, draw_2d=True, draw_face=True, draw_hands=True, render_backend="taichi"):
 
     cylinder_specs_list = get_cylinder_specs_list_from_poses(smpl_poses)
 
@@ -486,7 +493,14 @@ def render_multi_nlf_as_images(smpl_poses, dw_poses, height, width, video_length
     focal_y = intrinsic_matrix[1,1]
     princpt = (intrinsic_matrix[0,2], intrinsic_matrix[1,2])  # (cx, cy)
 
-    frames_np_rgba = render_whole(cylinder_specs_list, H=height, W=width, fx=focal_x, fy=focal_y, cx=princpt[0], cy=princpt[1])
+    if render_backend == "taichi":
+        try:
+            frames_np_rgba = render_whole_taichi(cylinder_specs_list, H=height, W=width, fx=focal_x, fy=focal_y, cx=princpt[0], cy=princpt[1])
+        except:
+            logging.warning("Taichi rendering failed. Falling back to torch rendering.")
+            frames_np_rgba = render_whole_torch(cylinder_specs_list, H=height, W=width, fx=focal_x, fy=focal_y, cx=princpt[0], cy=princpt[1])
+    else:
+        frames_np_rgba = render_whole_torch(cylinder_specs_list, H=height, W=width, fx=focal_x, fy=focal_y, cx=princpt[0], cy=princpt[1])
     if dw_poses is not None and draw_2d:
         aligned_poses = copy.deepcopy(dw_poses)
         canvas_2d = draw_pose_to_canvas_np(aligned_poses, pool=None, H=height, W=width, reshape_scale=0, show_feet_flag=False, show_body_flag=False, show_cheek_flag=True, dw_hand=True, show_face_flag=draw_face, show_hand_flag=draw_hands)
